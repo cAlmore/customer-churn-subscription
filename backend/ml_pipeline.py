@@ -10,7 +10,7 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 import warnings
 warnings.filterwarnings("ignore")
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), "../data/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+DATA_PATH = os.path.join(os.path.dirname(__file__), "../data/dataset.csv")
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "model.pkl")
 
 def load_and_preprocess(path=DATA_PATH):
