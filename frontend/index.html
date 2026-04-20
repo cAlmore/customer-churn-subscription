@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ChurnIQ — Customer Churn Analysis</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f8f9fb;
+    --surface: #ffffff;
+    --border: #e8eaed;
+    --text: #1a1d23;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --accent-light: #eff6ff;
+    --danger: #dc2626;
+    --danger-light: #fef2f2;
+    --warning: #d97706;
+    --warning-light: #fffbeb;
+    --success: #16a34a;
+    --success-light: #f0fdf4;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,.07), 0 2px 4px -2px rgba(0,0,0,.05);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+
+  /* Layout */
+  .shell { display: flex; min-height: 100vh; }
+  .sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); padding: 24px 16px; flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .main { flex: 1; padding: 32px; max-width: 1200px; }
+
+  /* Sidebar */
+  .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 32px; }
+  .logo-mark { width: 32px; height: 32px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 15px; }
+  .logo-text { font-weight: 700; font-size: 16px; }
+  .logo-sub { font-size: 11px; color: var(--muted); }
+  nav a { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 13.5px; font-weight: 500; transition: all .15s; margin-bottom: 2px; cursor: pointer; }
+  nav a:hover, nav a.active { background: var(--accent-light); color: var(--accent); }
+  nav .section-label { font-size: 10.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: 16px 12px 6px; }
+
+  /* Page sections */
+  .page { display: none; }
+  .page.active { display: block; }
+  .page-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .page-sub { color: var(--muted); margin-bottom: 28px; font-size: 13.5px; }
+
+  /* KPI Cards */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+  .kpi-label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }
+  .kpi-value { font-size: 30px; font-weight: 700; margin: 6px 0 2px; }
+  .kpi-meta { font-size: 12px; color: var(--muted); }
+  .kpi.danger .kpi-value { color: var(--danger); }
+  .kpi.warning .kpi-value { color: var(--warning); }
+  .kpi.success .kpi-value { color: var(--success); }
+  .kpi.accent .kpi-value { color: var(--accent); }
+
+  /* Cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); margin-bottom: 20px; }
+  .card-title { font-weight: 600; font-size: 15px; margin-bottom: 18px; }
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .chart-wrap { position: relative; height: 260px; }
+
+  /* Model metrics */
+  .metrics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .metric-box { background: var(--bg); border-radius: 8px; padding: 14px; text-align: center; }
+  .metric-box .val { font-size: 24px; font-weight: 700; color: var(--accent); }
+  .metric-box .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: .04em; }
+  .cm-table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+  .cm-table th, .cm-table td { border: 1px solid var(--border); padding: 10px 14px; text-align: center; font-size: 13px; }
+  .cm-table th { background: var(--bg); font-weight: 600; }
+  .cm-cell-tp { background: #dcfce7; color: #15803d; font-weight: 700; }
+  .cm-cell-tn { background: #dbeafe; color: #1d4ed8; font-weight: 700; }
+  .cm-cell-fp { background: #fef9c3; color: #854d0e; }
+  .cm-cell-fn { background: #fee2e2; color: #b91c1c; }
+
+  /* Table */
+  .tbl-wrap { overflow-x: auto; }
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.data-table th { background: var(--bg); color: var(--muted); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  table.data-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); }
+  table.data-table tr:hover td { background: var(--bg); }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11.5px; font-weight: 600; }
+  .badge.high { background: var(--danger-light); color: var(--danger); }
+  .badge.medium { background: var(--warning-light); color: var(--warning); }
+  .badge.low { background: var(--success-light); color: var(--success); }
+  .badge.yes { background: var(--danger-light); color: var(--danger); }
+  .badge.no { background: var(--success-light); color: var(--success); }
+
+  /* Predict form */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .field select, .field input { border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: 13.5px; background: var(--surface); outline: none; transition: border .15s; }
+  .field select:focus, .field input:focus { border-color: var(--accent); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-outline { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+  .btn-outline:hover { background: var(--accent-light); }
+  .predict-result { margin-top: 24px; padding: 24px; border-radius: var(--radius); border: 1px solid var(--border); }
+  .predict-result.high { background: var(--danger-light); border-color: #fca5a5; }
+  .predict-result.medium { background: var(--warning-light); border-color: #fcd34d; }
+  .predict-result.low { background: var(--success-light); border-color: #86efac; }
+  .prob-bar { background: var(--border); border-radius: 999px; height: 8px; margin: 10px 0 18px; overflow: hidden; }
+  .prob-fill { height: 100%; border-radius: 999px; transition: width .5s; }
+  .risk-factor { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.06); font-size: 13px; }
+  .risk-factor:last-child { border: none; }
+
+  /* Progress bars for feature importance */
+  .fi-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .fi-label { font-size: 12.5px; width: 200px; flex-shrink: 0; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fi-bar-wrap { flex: 1; background: var(--bg); border-radius: 4px; height: 8px; overflow: hidden; }
+  .fi-bar { height: 100%; background: var(--accent); border-radius: 4px; }
+  .fi-val { font-size: 11.5px; color: var(--muted); width: 40px; text-align: right; }
+
+  /* Loaders */
+  .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading { display: flex; align-items: center; gap: 12px; color: var(--muted); padding: 40px; justify-content: center; }
+  .empty { text-align: center; color: var(--muted); padding: 40px; }
+
+  /* Filter row */
+  .filter-row { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .filter-row input, .filter-row select { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; background: var(--surface); }
+  .filter-row input:focus { border-color: var(--accent); }
+
+  @media (max-width: 900px) {
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+    .chart-grid { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 1fr 1fr; }
+    .sidebar { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">C</div>
+      <div><div class="logo-text">ChurnIQ</div><div class="logo-sub">ML Analytics</div></div>
+    </div>
+    <nav>
+      <div class="section-label">Analytics</div>
+      <a class="active" onclick="show('overview')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Overview
+      </a>
+      <a onclick="show('model')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Model Performance
+      </a>
+      <a onclick="show('atrisk')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        At-Risk Customers
+      </a>
+      <div class="section-label">Tools</div>
+      <a onclick="show('predict')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        Predict Customer
+      </a>
+      <a onclick="show('data')">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Dataset
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main">
+
+    <!-- Overview page -->
+    <div class="page active" id="page-overview">
+      <div class="page-title">Churn Analysis Overview</div>
+      <div class="page-sub">Telco customer churn — 7,043 customers · Ensemble ML model (RF + GBM + LR)</div>
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="loading"><div class="spinner"></div> Loading…</div>
+      </div>
+      <div class="chart-grid">
+        <div class="card">
+          <div class="card-title">Churn Rate by Contract Type</div>
+          <div class="chart-wrap"><canvas id="chart-contract"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Churn Rate by Tenure</div>
+          <div class="chart-wrap"><canvas id="chart-tenure"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Churn Rate by Internet Service</div>
+          <div class="chart-wrap"><canvas id="chart-internet"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Risk Distribution (Predicted)</div>
+          <div class="chart-wrap"><canvas id="chart-risk"></canvas></div>
+        </div>
+      </div>
+      <div class="chart-grid">
+        <div class="card">
+          <div class="card-title">Churn Rate by Payment Method</div>
+          <div class="chart-wrap"><canvas id="chart-payment"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Avg Monthly Charges — Churned vs Retained</div>
+          <div class="chart-wrap"><canvas id="chart-charges"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Model Performance page -->
+    <div class="page" id="page-model">
+      <div class="page-title">Model Performance</div>
+      <div class="page-sub">Weighted ensemble: 45% GBM · 40% Random Forest · 15% Logistic Regression · 5-fold cross-validation</div>
+      <div class="metrics-grid" id="metrics-grid">
+        <div class="loading"><div class="spinner"></div> Loading…</div>
+      </div>
+      <div class="chart-grid" style="margin-top:20px">
+        <div class="card">
+          <div class="card-title">ROC Curve</div>
+          <div class="chart-wrap"><canvas id="chart-roc"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Confusion Matrix</div>
+          <div id="cm-container" class="loading"><div class="spinner"></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Feature Importance (Top 15 — averaged GBM + RF)</div>
+        <div id="fi-container" class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- At-Risk customers page -->
+    <div class="page" id="page-atrisk">
+      <div class="page-title">At-Risk Customers</div>
+      <div class="page-sub">Customers with predicted churn probability ≥ 65% — sorted by risk</div>
+      <div class="filter-row">
+        <input type="text" id="search-input" placeholder="Search by customer ID…" oninput="filterTable()" />
+        <select id="contract-filter" onchange="filterTable()">
+          <option value="">All contracts</option>
+          <option>Month-to-month</option>
+          <option>One year</option>
+          <option>Two year</option>
+        </select>
+        <span id="atrisk-count" style="margin-left:auto;color:var(--muted);font-size:13px"></span>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="tbl-wrap">
+          <table class="data-table" id="atrisk-table">
+            <thead>
+              <tr>
+                <th>Customer ID</th><th>Tenure</th><th>Contract</th>
+                <th>Monthly $</th><th>Internet</th><th>Tech Support</th>
+                <th>Services</th><th>Churn Prob</th><th>Risk</th><th>Actual</th>
+              </tr>
+            </thead>
+            <tbody id="atrisk-body">
+              <tr><td colspan="10" class="loading"><div class="spinner"></div> Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Predict page -->
+    <div class="page" id="page-predict">
+      <div class="page-title">Predict Customer Churn</div>
+      <div class="page-sub">Enter customer attributes to get real-time churn probability and risk factors</div>
+      <div class="card">
+        <div class="form-grid" id="predict-form">
+          <div class="field"><label>Contract Type</label>
+            <select id="f-contract"><option>Month-to-month</option><option>One year</option><option>Two year</option></select></div>
+          <div class="field"><label>Tenure (months)</label><input type="number" id="f-tenure" value="12" min="0" max="72"/></div>
+          <div class="field"><label>Monthly Charges ($)</label><input type="number" id="f-monthly" value="70" step="0.01"/></div>
+          <div class="field"><label>Internet Service</label>
+            <select id="f-internet"><option>Fiber optic</option><option>DSL</option><option>No</option></select></div>
+          <div class="field"><label>Tech Support</label>
+            <select id="f-tech"><option>No</option><option>Yes</option><option>No internet service</option></select></div>
+          <div class="field"><label>Online Security</label>
+            <select id="f-security"><option>No</option><option>Yes</option><option>No internet service</option></select></div>
+          <div class="field"><label>Payment Method</label>
+            <select id="f-payment"><option>Electronic check</option><option>Mailed check</option><option>Bank transfer (automatic)</option><option>Credit card (automatic)</option></select></div>
+          <div class="field"><label>Paperless Billing</label>
+            <select id="f-paperless"><option>Yes</option><option>No</option></select></div>
+          <div class="field"><label>Partner</label>
+            <select id="f-partner"><option>No</option><option>Yes</option></select></div>
+          <div class="field"><label>Dependents</label>
+            <select id="f-dependents"><option>No</option><option>Yes</option></select></div>
+          <div class="field"><label>Gender</label>
+            <select id="f-gender"><option>Male</option><option>Female</option></select></div>
+          <div class="field"><label>Senior Citizen</label>
+            <select id="f-senior"><option value="0">No</option><option value="1">Yes</option></select></div>
+        </div>
+        <div style="margin-top:22px;display:flex;gap:12px">
+          <button class="btn btn-primary" onclick="runPredict()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Predict Risk
+          </button>
+          <button class="btn btn-outline" onclick="fillHighRisk()">Fill High-Risk Example</button>
+          <button class="btn btn-outline" onclick="fillLowRisk()">Fill Low-Risk Example</button>
+        </div>
+        <div id="predict-result" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- Dataset page -->
+    <div class="page" id="page-data">
+      <div class="page-title">Dataset Preview</div>
+      <div class="page-sub">Raw telco customer data — showing first 20 rows</div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="tbl-wrap">
+          <table class="data-table" id="dataset-table">
+            <thead><tr id="dataset-head"></tr></thead>
+            <tbody id="dataset-body">
+              <tr><td class="loading" colspan="12"><div class="spinner"></div> Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+let statsData = null, metricsData = null, atRiskData = [];
+
+// Navigation
+function show(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  event.target.closest('a').classList.add('active');
+  if (page === 'overview' && !statsData) loadOverview();
+  if (page === 'model' && !metricsData) loadModel();
+  if (page === 'atrisk' && !atRiskData.length) loadAtRisk();
+  if (page === 'data') loadDataset();
+}
+
+// Chart defaults
+Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+Chart.defaults.font.size = 12;
+Chart.defaults.color = '#6b7280';
+
+const PALETTE = ['#2563eb','#16a34a','#d97706','#9333ea','#dc2626','#0891b2'];
+const barOpts = (horizontal=false) => ({
+  responsive: true, maintainAspectRatio: false,
+  indexAxis: horizontal ? 'y' : 'x',
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { color: '#f1f3f5' }, border: { display: false } },
+    y: { grid: { color: '#f1f3f5' }, border: { display: false } }
+  }
+});
+
+// ── Overview ──────────────────────────────────────────────────────────
+async function loadOverview() {
+  const data = await fetch(API + '/api/stats').then(r => r.json());
+  statsData = data;
+
+  // KPIs
+  document.getElementById('kpi-grid').innerHTML = `
+    <div class="kpi danger">
+      <div class="kpi-label">Churn Rate</div>
+      <div class="kpi-value">${data.churn_rate}%</div>
+      <div class="kpi-meta">${data.churned_customers} churned customers</div>
+    </div>
+    <div class="kpi warning">
+      <div class="kpi-label">At-Risk (High)</div>
+      <div class="kpi-value">${data.at_risk_count}</div>
+      <div class="kpi-meta">Prob ≥ 65%</div>
+    </div>
+    <div class="kpi accent">
+      <div class="kpi-label">Total Customers</div>
+      <div class="kpi-value">${data.total_customers.toLocaleString()}</div>
+      <div class="kpi-meta">Across all contracts</div>
+    </div>
+    <div class="kpi success">
+      <div class="kpi-label">Retained</div>
+      <div class="kpi-value">${(data.total_customers - data.churned_customers).toLocaleString()}</div>
+      <div class="kpi-meta">${(100 - data.churn_rate).toFixed(1)}% retention rate</div>
+    </div>
+  `;
+
+  // Contract churn
+  const cc = data.contract_churn;
+  new Chart(document.getElementById('chart-contract'), {
+    type: 'bar',
+    data: { labels: Object.keys(cc), datasets: [{ data: Object.values(cc), backgroundColor: PALETTE, borderRadius: 6 }] },
+    options: { ...barOpts(), plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { title: { display: true, text: 'Churn %' } } } }
+  });
+
+  // Tenure churn
+  const tc = data.tenure_churn;
+  new Chart(document.getElementById('chart-tenure'), {
+    type: 'line',
+    data: { labels: Object.keys(tc), datasets: [{ data: Object.values(tc), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.08)', fill: true, tension: 0.35, pointRadius: 4, pointBackgroundColor: '#2563eb' }] },
+    options: { ...barOpts(), plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { title: { display: true, text: 'Churn %' } } } }
+  });
+
+  // Internet churn
+  const ic = data.internet_churn;
+  new Chart(document.getElementById('chart-internet'), {
+    type: 'bar',
+    data: { labels: Object.keys(ic), datasets: [{ data: Object.values(ic), backgroundColor: ['#dc2626','#2563eb','#16a34a'], borderRadius: 6 }] },
+    options: { ...barOpts(), scales: { x: { grid: { display: false } }, y: { title: { display: true, text: 'Churn %' } } } }
+  });
+
+  // Risk distribution (donut)
+  const rd = data.risk_distribution;
+  new Chart(document.getElementById('chart-risk'), {
+    type: 'doughnut',
+    data: {
+      labels: ['High Risk', 'Medium Risk', 'Low Risk'],
+      datasets: [{ data: [rd.High, rd.Medium, rd.Low], backgroundColor: ['#dc2626','#d97706','#16a34a'], borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { padding: 16 } } } }
+  });
+
+  // Payment churn
+  const pc = data.payment_churn;
+  new Chart(document.getElementById('chart-payment'), {
+    type: 'bar',
+    data: { labels: Object.keys(pc), datasets: [{ data: Object.values(pc), backgroundColor: PALETTE, borderRadius: 6 }] },
+    options: { ...barOpts(true), scales: { x: { title: { display: true, text: 'Churn %' } }, y: { grid: { display: false } } } }
+  });
+
+  // Charges comparison
+  const ch = data.monthly_charges;
+  new Chart(document.getElementById('chart-charges'), {
+    type: 'bar',
+    data: {
+      labels: ['Min', 'Avg', 'Median', 'Max'],
+      datasets: [
+        { label: 'Churned', data: [ch.churned.min, ch.churned.mean, ch.churned['50%'], ch.churned.max], backgroundColor: 'rgba(220,38,38,.75)', borderRadius: 5 },
+        { label: 'Retained', data: [ch.retained.min, ch.retained.mean, ch.retained['50%'], ch.retained.max], backgroundColor: 'rgba(37,99,235,.65)', borderRadius: 5 }
+      ]
+    },
+    options: { ...barOpts(), plugins: { legend: { display: true, position: 'top' } }, scales: { x: { grid: { display: false } }, y: { title: { display: true, text: '$' } } } }
+  });
+}
+
+// ── Model Metrics ──────────────────────────────────────────────────────
+async function loadModel() {
+  const m = await fetch(API + '/api/model-metrics').then(r => r.json());
+  metricsData = m;
+
+  document.getElementById('metrics-grid').innerHTML = `
+    <div class="metric-box"><div class="val">${m.accuracy}%</div><div class="lbl">Test Accuracy</div></div>
+    <div class="metric-box"><div class="val">${m.roc_auc}%</div><div class="lbl">ROC-AUC</div></div>
+    <div class="metric-box"><div class="val">${m.cv_accuracy}%</div><div class="lbl">5-Fold CV Accuracy</div></div>
+    <div class="metric-box"><div class="val">${m.precision_churn}%</div><div class="lbl">Churn Precision</div></div>
+    <div class="metric-box"><div class="val">${m.recall_churn}%</div><div class="lbl">Churn Recall</div></div>
+    <div class="metric-box"><div class="val">${m.f1_churn}%</div><div class="lbl">Churn F1 Score</div></div>
+  `;
+
+  // ROC curve
+  new Chart(document.getElementById('chart-roc'), {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: `ROC (AUC=${m.roc_auc}%)`, data: m.roc_curve.fpr.map((f,i)=>({x:f,y:m.roc_curve.tpr[i]})), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.07)', fill: true, pointRadius: 0, tension: 0.1, borderWidth: 2 },
+        { label: 'Random', data: [{x:0,y:0},{x:1,y:1}], borderColor: '#d1d5db', borderDash: [4,4], pointRadius: 0, borderWidth: 1.5 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } },
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'False Positive Rate' }, min: 0, max: 1 },
+        y: { title: { display: true, text: 'True Positive Rate' }, min: 0, max: 1 }
+      }
+    }
+  });
+
+  // Confusion Matrix
+  const cm = m.confusion_matrix;
+  document.getElementById('cm-container').innerHTML = `
+    <table class="cm-table">
+      <thead>
+        <tr><th></th><th>Predicted: No Churn</th><th>Predicted: Churn</th></tr>
+      </thead>
+      <tbody>
+        <tr><th>Actual: No Churn</th><td class="cm-cell-tn">${cm[0][0]}<br><small>True Negatives</small></td><td class="cm-cell-fp">${cm[0][1]}<br><small>False Positives</small></td></tr>
+        <tr><th>Actual: Churn</th><td class="cm-cell-fn">${cm[1][0]}<br><small>False Negatives</small></td><td class="cm-cell-tp">${cm[1][1]}<br><small>True Positives</small></td></tr>
+      </tbody>
+    </table>
+    <div style="margin-top:14px;font-size:12px;color:var(--muted)">
+      <b>TN</b> = Correctly retained &nbsp; <b>TP</b> = Correctly identified churn &nbsp; <b>FP</b> = False alarm &nbsp; <b>FN</b> = Missed churn
+    </div>
+  `;
+
+  // Feature importance bars
+  const fi = m.feature_importance;
+  const maxVal = Math.max(...Object.values(fi));
+  const fiHtml = Object.entries(fi).map(([k,v]) => `
+    <div class="fi-row">
+      <div class="fi-label" title="${k}">${k}</div>
+      <div class="fi-bar-wrap"><div class="fi-bar" style="width:${(v/maxVal*100).toFixed(1)}%"></div></div>
+      <div class="fi-val">${(v*100).toFixed(1)}%</div>
+    </div>
+  `).join('');
+  document.getElementById('fi-container').innerHTML = fiHtml;
+}
+
+// ── At-Risk ────────────────────────────────────────────────────────────
+async function loadAtRisk() {
+  const data = await fetch(API + '/api/at-risk?threshold=0.65&limit=200').then(r => r.json());
+  atRiskData = data.customers;
+  document.getElementById('atrisk-count').textContent = `${data.count} customers found`;
+  renderAtRisk(atRiskData);
+}
+
+function renderAtRisk(rows) {
+  const tbody = document.getElementById('atrisk-body');
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="10" class="empty">No customers found</td></tr>'; return; }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td style="font-family:monospace;font-size:12px">${r.customerID}</td>
+      <td>${r.tenure} mo</td>
+      <td>${r.Contract}</td>
+      <td>$${r.MonthlyCharges.toFixed(2)}</td>
+      <td>${r.InternetService}</td>
+      <td>${r.TechSupport}</td>
+      <td style="text-align:center">${r.NumServices}</td>
+      <td>
+        <div style="font-weight:600">${(r.churn_probability * 100).toFixed(1)}%</div>
+        <div style="background:var(--border);border-radius:4px;height:4px;width:70px;margin-top:3px">
+          <div style="background:${r.churn_probability>0.8?'#dc2626':'#d97706'};width:${(r.churn_probability*100).toFixed(0)}%;height:4px;border-radius:4px"></div>
+        </div>
+      </td>
+      <td><span class="badge ${r.risk_level.toLowerCase()}">${r.risk_level}</span></td>
+      <td><span class="badge ${r.actual_churn.toLowerCase()}">${r.actual_churn}</span></td>
+    </tr>
+  `).join('');
+}
+
+function filterTable() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  const c = document.getElementById('contract-filter').value;
+  const filtered = atRiskData.filter(r =>
+    (!q || r.customerID.toLowerCase().includes(q)) &&
+    (!c || r.Contract === c)
+  );
+  document.getElementById('atrisk-count').textContent = `${filtered.length} customers found`;
+  renderAtRisk(filtered);
+}
+
+// ── Predict ────────────────────────────────────────────────────────────
+async function runPredict() {
+  const tenure = +document.getElementById('f-tenure').value;
+  const monthly = +document.getElementById('f-monthly').value;
+  const payload = {
+    gender: document.getElementById('f-gender').value,
+    SeniorCitizen: +document.getElementById('f-senior').value,
+    Partner: document.getElementById('f-partner').value,
+    Dependents: document.getElementById('f-dependents').value,
+    tenure, PhoneService: 'Yes',
+    MultipleLines: 'No',
+    InternetService: document.getElementById('f-internet').value,
+    OnlineSecurity: document.getElementById('f-security').value,
+    OnlineBackup: 'No', DeviceProtection: 'No',
+    TechSupport: document.getElementById('f-tech').value,
+    StreamingTV: 'No', StreamingMovies: 'No',
+    Contract: document.getElementById('f-contract').value,
+    PaperlessBilling: document.getElementById('f-paperless').value,
+    PaymentMethod: document.getElementById('f-payment').value,
+    MonthlyCharges: monthly,
+    TotalCharges: monthly * tenure,
+    customerID: 'PREDICT-001', Churn: 'No'
+  };
+
+  const resultEl = document.getElementById('predict-result');
+  resultEl.style.display = 'block';
+  resultEl.className = 'predict-result';
+  resultEl.innerHTML = '<div class="loading"><div class="spinner"></div> Analyzing…</div>';
+
+  const res = await fetch(API + '/api/predict', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) }).then(r=>r.json());
+
+  const pct = (res.churn_probability * 100).toFixed(1);
+  const lvl = res.risk_level.toLowerCase();
+  const colors = { high: '#dc2626', medium: '#d97706', low: '#16a34a' };
+  const labels = { high: '⚠️ High Churn Risk', medium: '⚡ Medium Churn Risk', low: '✅ Low Churn Risk' };
+
+  resultEl.className = `predict-result ${lvl}`;
+  resultEl.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">${labels[lvl]}</div>
+        <div style="font-size:42px;font-weight:800;color:${colors[lvl]};margin:4px 0">${pct}%</div>
+        <div style="color:var(--muted);font-size:13px">Churn probability</div>
+      </div>
+      <div style="text-align:right">
+        <span style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase">Risk Level</span>
+        <div style="margin-top:4px"><span class="badge ${lvl}" style="font-size:14px;padding:4px 16px">${res.risk_level}</span></div>
+      </div>
+    </div>
+    <div class="prob-bar"><div class="prob-fill" style="width:${pct}%;background:${colors[lvl]}"></div></div>
+    <div style="font-weight:600;font-size:13px;margin-bottom:8px">Risk Factors</div>
+    ${res.risk_factors.map(f => `
+      <div class="risk-factor">
+        <span class="badge ${f.impact.toLowerCase()}">${f.impact}</span>
+        <span>${f.factor}</span>
+      </div>
+    `).join('')}
+  `;
+}
+
+function fillHighRisk() {
+  document.getElementById('f-contract').value = 'Month-to-month';
+  document.getElementById('f-tenure').value = 2;
+  document.getElementById('f-monthly').value = 95;
+  document.getElementById('f-internet').value = 'Fiber optic';
+  document.getElementById('f-tech').value = 'No';
+  document.getElementById('f-security').value = 'No';
+  document.getElementById('f-payment').value = 'Electronic check';
+  document.getElementById('f-paperless').value = 'Yes';
+}
+
+function fillLowRisk() {
+  document.getElementById('f-contract').value = 'Two year';
+  document.getElementById('f-tenure').value = 60;
+  document.getElementById('f-monthly').value = 45;
+  document.getElementById('f-internet').value = 'DSL';
+  document.getElementById('f-tech').value = 'Yes';
+  document.getElementById('f-security').value = 'Yes';
+  document.getElementById('f-payment').value = 'Credit card (automatic)';
+  document.getElementById('f-paperless').value = 'No';
+}
+
+// ── Dataset ────────────────────────────────────────────────────────────
+async function loadDataset() {
+  const data = await fetch(API + '/api/dataset-preview?limit=20').then(r => r.json());
+  if (!data.rows.length) return;
+  const cols = Object.keys(data.rows[0]);
+  document.getElementById('dataset-head').innerHTML = cols.map(c => `<th>${c}</th>`).join('');
+  document.getElementById('dataset-body').innerHTML = data.rows.map(r =>
+    `<tr>${cols.map(c => `<td>${c==='Churn'?`<span class="badge ${String(r[c]).toLowerCase()}">${r[c]}</span>`:r[c]}</td>`).join('')}</tr>`
+  ).join('');
+}
+
+// ── Init ───────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  loadOverview();
+});
+</script>
+</body>
+</html>
